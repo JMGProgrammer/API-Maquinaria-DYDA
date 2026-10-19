@@ -1,14 +1,15 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <RootNamespace>API_Maquinaria_juan</RootNamespace>
-    </PropertyGroup>
+      <UserSecretsId>730596c0-ae7d-45d0-9467-5a72c5150f82</UserSecretsId>
+  </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
