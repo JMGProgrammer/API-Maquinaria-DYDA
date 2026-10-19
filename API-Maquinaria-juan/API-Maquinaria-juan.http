@@ -1,6 +1,36 @@
 @API_Maquinaria_juan_HostAddress = http://localhost:5244
 
-GET {{API_Maquinaria_juan_HostAddress}}/weatherforecast/
+### Listar todos los equipos
+GET {{API_Maquinaria_juan_HostAddress}}/api/equipment
 Accept: application/json
+
+### Obtener un equipo por ID
+GET {{API_Maquinaria_juan_HostAddress}}/api/equipment/eq-1
+Accept: application/json
+
+### Crear un equipo
+POST {{API_Maquinaria_juan_HostAddress}}/api/equipment
+Content-Type: application/json
+
+{
+  "name": "Nueva máquina",
+  "code": "NUM-010",
+  "location": "Depósito",
+  "status": "Operativo"
+}
+
+### Actualizar un equipo
+PUT {{API_Maquinaria_juan_HostAddress}}/api/equipment/eq-1
+Content-Type: application/json
+
+{
+  "name": "Bomba centrífuga 01",
+  "code": "BOM-001",
+  "location": "Sala de máquinas",
+  "status": "En mantenimiento"
+}
+
+### Eliminar un equipo
+DELETE {{API_Maquinaria_juan_HostAddress}}/api/equipment/eq-3
 
 ###
