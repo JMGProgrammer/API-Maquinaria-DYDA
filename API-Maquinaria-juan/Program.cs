@@ -1,4 +1,7 @@
 using API_Maquinaria_juan.Data;
+using API_Maquinaria_juan.Interfaces;
+using API_Maquinaria_juan.Repositories;
+using API_Maquinaria_juan.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Registros de inyección de dependencias (capas Repository y Service).
+builder.Services.AddScoped<IEquipmentRepository, EquipmentRepository>();
+builder.Services.AddScoped<IEquipmentService, EquipmentService>();
 
 
 builder.Services.AddDbContext<AppDbContext>(options =>
