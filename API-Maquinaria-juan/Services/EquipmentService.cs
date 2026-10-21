@@ -15,17 +15,22 @@ namespace API_Maquinaria_juan.Services
             _repository = repository;
         }
 
-        public Task<List<Equipment>> GetAllAsync()
+        public async Task<List<EquipmentReadDTO>> GetAllAsync()
         {
-            return _repository.GetAllAsync();
+            var equipos = await _repository.GetAllAsync();
+
+            return equipos.Select(ToReadDto).ToList();
         }
 
-        public Task<Equipment?> GetByIdAsync(string id)
+        public async Task<EquipmentReadDTO?> GetByIdAsync(string id)
         {
-            return _repository.GetByIdAsync(id);
+            var equipo = await _repository.GetByIdAsync(id);
+
+            // el controller traduce el null a 404
+            return equipo == null ? null : ToReadDto(equipo);
         }
 
-        public async Task<Equipment> CreateAsync(EquipmentCreateDTO input)
+        public async Task<EquipmentReadDTO> CreateAsync(EquipmentCreateDTO input)
         {
             var code = input.Code.Trim().ToUpperInvariant();
 
@@ -40,19 +45,15 @@ namespace API_Maquinaria_juan.Services
 
             var siguiente = numeros.DefaultIfEmpty(0).Max() + 1;
 
-            var equipo = new Equipment
-            {
-                Id = "eq-" + siguiente,
-                Name = input.Name.Trim(),
-                Code = code,
-                Location = input.Location.Trim(),
-                Status = input.Status
-            };
+            var equipo = ToEntity(input);
+            equipo.Id = "eq-" + siguiente;
 
-            return await _repository.AddAsync(equipo);
+            await _repository.AddAsync(equipo);
+
+            return ToReadDto(equipo);
         }
 
-        public async Task<Equipment?> UpdateAsync(string id, EquipmentUpdateDTO input)
+        public async Task<EquipmentReadDTO?> UpdateAsync(string id, EquipmentUpdateDTO input)
         {
             var equipo = await _repository.GetByIdAsync(id);
 
@@ -61,26 +62,52 @@ namespace API_Maquinaria_juan.Services
                 return null; // el controller lo traduce a 404
             }
 
-            var code = input.Code.Trim().ToUpper();
+            var cambios = ToEntity(input);
 
-            if (await _repository.ExistsByCodeExcludingAsync(code, id))
+            if (await _repository.ExistsByCodeExcludingAsync(cambios.Code, id))
             {
                 throw new InvalidOperationException("El código ya existe");
             }
 
-            equipo.Name = input.Name.Trim();
-            equipo.Code = code;
-            equipo.Location = input.Location.Trim();
-            equipo.Status = input.Status;
+            equipo.Name = cambios.Name;
+            equipo.Code = cambios.Code;
+            equipo.Location = cambios.Location;
+            equipo.Status = cambios.Status;
 
             await _repository.UpdateAsync(equipo);
 
-            return equipo;
+            return ToReadDto(equipo);
         }
 
         public Task<bool> DeleteAsync(string id)
         {
             return _repository.DeleteAsync(id);
+        }
+
+        // Mapea el DTO de entrada (sirve igual para Create y Update, por heredar
+        // de EquipmentInputDTO) a la entidad Equipment. Normaliza Code a mayúsculas.
+        private static Equipment ToEntity(EquipmentInputDTO input)
+        {
+            return new Equipment
+            {
+                Name = input.Name.Trim(),
+                Code = input.Code.Trim().ToUpperInvariant(),
+                Location = input.Location.Trim(),
+                Status = input.Status
+            };
+        }
+
+        // Mapea la entidad al DTO de salida; el Id solo se expone al leer.
+        private static EquipmentReadDTO ToReadDto(Equipment equipment)
+        {
+            return new EquipmentReadDTO
+            {
+                Id = equipment.Id,
+                Name = equipment.Name,
+                Code = equipment.Code,
+                Location = equipment.Location,
+                Status = equipment.Status
+            };
         }
     }
 }
