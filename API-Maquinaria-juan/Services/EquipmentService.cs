@@ -4,8 +4,15 @@ using API_Maquinaria_juan.Models;
 
 namespace API_Maquinaria_juan.Services
 {
-    // Reglas de negocio: normalizar Code a mayúsculas, rechazar duplicados (409)
-    // y generar el Id secuencial "eq-N". El controller ya no conoce el DbContext.
+    // REGLAS DE NEGOCIO de la capa equipment:
+    //   1. Normalizar Code a mayúsculas (para que "abc-1" y "ABC-1" sean el mismo).
+    //   2. No permitir Codes duplicados (lo avisa lanzando excepción → controller
+    //      la traduce a 409 Conflict).
+    //   3. Generar el Id secuencial "eq-N" al crear.
+    //
+    // Esta clase es la ÚNICA que entiende tanto del modelo Equipment (por los
+    // mapeadores de abajo) como de los DTOs. El controller recibe/entrega DTOs
+    // y el repository solo mueve entidades.
     public class EquipmentService : IEquipmentService
     {
         private readonly IEquipmentRepository _repository;
@@ -30,6 +37,13 @@ namespace API_Maquinaria_juan.Services
             return equipo == null ? null : ToReadDto(equipo);
         }
 
+        // La EXCEPTION como señal de "regla de negocio rota":
+        // el service no sabe qué status code HTTP mostrar, así que no puede
+        // devolver 409 él mismo. Lanza InvalidOperationException ("la operación
+        // no es válida en este estado") y DELEGA al controller atraparla y
+        // traducirla a Conflict(). InvalidOperationException es la excepción
+        // estándar de .NET para "el estado actual no permite esto"
+        // (un Code duplicado es exactamente eso).
         public async Task<EquipmentReadDTO> CreateAsync(EquipmentCreateDTO input)
         {
             var code = input.Code.Trim().ToUpperInvariant();
@@ -39,6 +53,11 @@ namespace API_Maquinaria_juan.Services
                 throw new InvalidOperationException("El código ya existe");
             }
 
+            // Generación del Id secuencial "eq-N":
+            // baja TODOS los Ids existentes, extrae el número (Substring(3) = lo
+            // que sigue a "eq-", ej: de "eq-12" queda "12"), se queda con el mayor
+            // y le suma 1. DefaultIfEmpty(0) evita la excepción de Max() cuando
+            // la tabla está vacía (Max de una lista vacía lanza InvalidOperationException!).
             var ids = await _repository.GetAllIdsAsync();
 
             var numeros = ids.Select(id => int.Parse(id.Substring(3)));
@@ -46,6 +65,9 @@ namespace API_Maquinaria_juan.Services
             var siguiente = numeros.DefaultIfEmpty(0).Max() + 1;
 
             var equipo = ToEntity(input);
+
+            // El Id se asigna FUERA de ToEntity a propósito: el Id no viene del
+            // DTO (el cliente no lo elige), es una regla del alta de este service.
             equipo.Id = "eq-" + siguiente;
 
             await _repository.AddAsync(equipo);
@@ -62,8 +84,16 @@ namespace API_Maquinaria_juan.Services
                 return null; // el controller lo traduce a 404
             }
 
+            // ¿Por qué usar ToEntity en un update si ya tengo la entidad cargada?
+            // 1) Reutilizo la normalización de Code que hace ToEntity (no la repito acá).
+            // 2) Se genera una copia "limpia" con SOLO los campos editables; los
+            //    paso a la entidad traída de la DB campo a campo, porque el Id
+            //    de esa entidad NO se toca jamás en un update.
             var cambios = ToEntity(input);
 
+            // Mismo check que en Create, pero con Excluding: el Code duplicado
+            // tiene que ser de OTRO equipo; el propio equipo puede conservar su
+            // mismo código al re-editarlo.
             if (await _repository.ExistsByCodeExcludingAsync(cambios.Code, id))
             {
                 throw new InvalidOperationException("El código ya existe");
@@ -84,8 +114,21 @@ namespace API_Maquinaria_juan.Services
             return _repository.DeleteAsync(id);
         }
 
-        // Mapea el DTO de entrada (sirve igual para Create y Update, por heredar
-        // de EquipmentInputDTO) a la entidad Equipment. Normaliza Code a mayúsculas.
+        // ===== MAPEADORES =====
+        //
+        // Son las funciones "puente" entre el mundo exterior (DTOs) y la
+        // base de datos (entidad Equipment). Toda conversión DTO ↔ entidad de
+        // este modelo empieza y termina acá.
+        //
+        // ¿Por qué private static?
+        // - static: son funciones puras, no tocan _repository ni guardan estado;
+        //   no necesitan una instancia del service para correr.
+        // - private: nadie afuera del service las necesita; el controller recibe
+        //   DTOs ya armados y listo.
+        //
+        // ToEntity: ENTRADA. Recibe EquipmentInputDTO (la CLASE BASE, por eso el
+        // mismo método sirve para EquipmentCreateDTO y EquipmentUpdateDTO, que
+        // heredan de ella). Aplica el Trim + mayúsculas de Code en un solo lugar.
         private static Equipment ToEntity(EquipmentInputDTO input)
         {
             return new Equipment
@@ -97,7 +140,9 @@ namespace API_Maquinaria_juan.Services
             };
         }
 
-        // Mapea la entidad al DTO de salida; el Id solo se expone al leer.
+        // ToReadDto: SALIDA. Entidad completa de la DB → DTO que se envía al cliente.
+        // Este es el ÚNICO lugar donde el Id se transfiere al DTO: la entidad
+        // siempre lo tiene, pero solo se lo entrega al cliente al leer/guardar.
         private static EquipmentReadDTO ToReadDto(Equipment equipment)
         {
             return new EquipmentReadDTO
