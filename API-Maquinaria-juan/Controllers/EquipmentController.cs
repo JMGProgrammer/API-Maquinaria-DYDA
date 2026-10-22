@@ -44,18 +44,22 @@ namespace API_Maquinaria_juan.Controllers
         // ===== TRY & CATCH =====
         //
         // Reparto de trabajo entre capas:
-        //   - el SERVICE lanza la excepción cuando una regla de negocio no se cumple
-        //     (ej: "El código ya existe"), pero él NO sabe nada de HTTP;
-        //   - este CONTROLLER la CAPTA con try/catch y la traduce a un status code.
+        //   - el SERVICE VALIDA con Validar() y LANZA ArgumentException cuando
+        //     un dato no cumple una regla (campo vacío, muy largo, etc.),
+        //     pero él NO sabe nada de HTTP;
+        //   - este CONTROLLER la CAPTA con try/catch y la traduce a un status code
+        //     con el mensaje exacto de la causa ("El nombre es obligatorio", etc.).
         //
-        // ¿Por qué catch específico (InvalidOperationException) y no catch (Exception)?
+        // ¿Por qué BadRequest (400)? ArgumentException significa "el argumento
+        // (dato de entrada) no es válido" → el problema lo tiene el que envía
+        // el body, no el servidor. El service decide cuál regla falló: cada
+        // "throw new ArgumentException(...)" tiene su mensaje propio.
+        //
+        // ¿Por qué catch específico (ArgumentException) y no catch (Exception)?
         // El catch general "traga" también los bugs verdaderos (null reference,
-        // fallo de conexión...) disfrazándolos de un 409 común. Con el catch
-        // específico, solo atrapamos la excepción que NOSOTROS planificamos
-        // throw en el service; lo inesperado sigue estallando.
-        //
-        // 409 Conflict significa "conflicto con el estado actual del recurso",
-        // que es exactamente "ya hay un equipo con ese Code".
+        // fallo de conexión...) disfrazándolos de un 400 común. Con el catch
+        // específico, solo atrapamos la excepción que NOSOTROS planeamos throw
+        // en el service; lo inesperado sigue estallando.
         [HttpPost]
         public async Task<IActionResult> Post(EquipmentCreateDTO input)
         {
@@ -64,13 +68,14 @@ namespace API_Maquinaria_juan.Controllers
                 var equipo = await _service.CreateAsync(input);
 
                 // Created = 201 + cabecera Location apuntando a dónde ver lo nuevo.
-                // El service ya devolvió EquipmentReadDTO (mapeado al final de CreateAsync).
+                // El service ya devolvió EquipmentReadDTO (mapeado al final de CreateAsync;
+                // si algo falló, no llega acá porque Validar() cortó el flujo antes).
                 return Created($"/api/equipment/{equipo.Id}", equipo);
             }
-            catch (InvalidOperationException ex)
+            catch (ArgumentException ex)
             {
-                // regla de negocio rota (código duplicado) → 409
-                return Conflict(ex.Message);
+                // Validar() del service lanzó un dato inválido → 400 con la causa puntual
+                return BadRequest(ex.Message);
             }
         }
 
@@ -90,10 +95,11 @@ namespace API_Maquinaria_juan.Controllers
 
                 return Ok(equipo);
             }
-            // Igual al POST: el service lanzó "Code duplicado" → 409 Conflict.
-            catch (InvalidOperationException ex)
+            // Igual al POST: Validar() del service lanzó ArgumentException → 400
+            // con el mensaje de la regla que falló (ej: "El nombre es obligatorio").
+            catch (ArgumentException ex)
             {
-                return Conflict(ex.Message);
+                return BadRequest(ex.Message);
             }
         }
 

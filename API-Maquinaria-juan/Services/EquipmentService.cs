@@ -6,10 +6,9 @@ namespace API_Maquinaria_juan.Services
 {
     // REGLAS DE NEGOCIO de la capa equipment:
     //   1. Normalizar Code a mayúsculas (para que "abc-1" y "ABC-1" sean el mismo).
-    //   2. No permitir Codes duplicados (lo avisa lanzando excepción → controller
-    //      la traduce a 409 Conflict).
+    //   2. Validar los datos de entrada con Validar() → ante cualquier falla lanza
+    //      ArgumentException, que el controller atrapa y traduce a 400 BadRequest.
     //   3. Generar el Id secuencial "eq-N" al crear.
-    //
     // Esta clase es la ÚNICA que entiende tanto del modelo Equipment (por los
     // mapeadores de abajo) como de los DTOs. El controller recibe/entrega DTOs
     // y el repository solo mueve entidades.
@@ -37,21 +36,11 @@ namespace API_Maquinaria_juan.Services
             return equipo == null ? null : ToReadDto(equipo);
         }
 
-        // La EXCEPTION como señal de "regla de negocio rota":
-        // el service no sabe qué status code HTTP mostrar, así que no puede
-        // devolver 409 él mismo. Lanza InvalidOperationException ("la operación
-        // no es válida en este estado") y DELEGA al controller atraparla y
-        // traducirla a Conflict(). InvalidOperationException es la excepción
-        // estándar de .NET para "el estado actual no permite esto"
-        // (un Code duplicado es exactamente eso).
         public async Task<EquipmentReadDTO> CreateAsync(EquipmentCreateDTO input)
         {
-            var code = input.Code.Trim().ToUpperInvariant();
-
-            if (await _repository.ExistsByCodeAsync(code))
-            {
-                throw new InvalidOperationException("El código ya existe");
-            }
+            // Todo lo que puede fallar por dato inválido sale a la superficie acá:
+            // si Validar() lanza ArgumentException, el flujo corta ANTES de tocar la DB.
+            Validar(input);
 
             // Generación del Id secuencial "eq-N":
             // baja TODOS los Ids existentes, extrae el número (Substring(3) = lo
@@ -84,20 +73,15 @@ namespace API_Maquinaria_juan.Services
                 return null; // el controller lo traduce a 404
             }
 
+            // Validar cubre los campos de entrada; si algo no cumple rompe acá.
+            Validar(input);
+
             // ¿Por qué usar ToEntity en un update si ya tengo la entidad cargada?
             // 1) Reutilizo la normalización de Code que hace ToEntity (no la repito acá).
             // 2) Se genera una copia "limpia" con SOLO los campos editables; los
             //    paso a la entidad traída de la DB campo a campo, porque el Id
             //    de esa entidad NO se toca jamás en un update.
             var cambios = ToEntity(input);
-
-            // Mismo check que en Create, pero con Excluding: el Code duplicado
-            // tiene que ser de OTRO equipo; el propio equipo puede conservar su
-            // mismo código al re-editarlo.
-            if (await _repository.ExistsByCodeExcludingAsync(cambios.Code, id))
-            {
-                throw new InvalidOperationException("El código ya existe");
-            }
 
             equipo.Name = cambios.Name;
             equipo.Code = cambios.Code;
@@ -112,6 +96,62 @@ namespace API_Maquinaria_juan.Services
         public Task<bool> DeleteAsync(string id)
         {
             return _repository.DeleteAsync(id);
+        }
+
+        // ===== VALIDACIÓN CENTRALIZADA =====
+        //
+        // Toda regla de "dato inválido" vive acá, en un solo lugar. Si algo no
+        // cumple, lanza ArgumentException con su mensaje de causa puntual; el
+        // controller atrapa la excepción y la convierte en 400 BadRequest(msg).
+        //
+        // ¿Por qué ArgumentException? Es la excepción estándar de .NET para
+        // "me pasaron un argumento/valor que no sirve" (los campos del body son
+        // justamente los argumentos de esta operación).
+        //
+        // ¿Por qué síncrono? Solo mira los valores del DTO en memoria: no toca
+        // la DB ni nada lento → no se necesita async.
+        //
+        // ¿No están duplicados los [Required] del DTO? Es una validación en doble capa:
+        // los DataAnnotations cortan ANTEMANO con un 400 genérico de ASP.NET;
+        // Validar() es la segunda muralla (y la que pone mensajes en español con
+        // dominio de negocio). Servicio robusto = desconfiar de los datos aunque
+        // "ya fueran validados" en otra capa.
+        private void Validar(EquipmentInputDTO input)
+        {
+            // --- Name ---
+            // IsNullOrWhiteSpace cubre campos "" o con solo espacios, que [Required]
+            // solos no filtran bien.
+            if (string.IsNullOrWhiteSpace(input.Name))
+            {
+                throw new ArgumentException("El nombre es obligatorio");
+            }
+
+            if (input.Name.Trim().Length > 100)
+            {
+                throw new ArgumentException("El nombre no puede superar los 100 caracteres");
+            }
+
+            // --- Code ---
+            if (string.IsNullOrWhiteSpace(input.Code))
+            {
+                throw new ArgumentException("El código es obligatorio");
+            }
+
+            if (input.Code.Trim().Length > 30)
+            {
+                throw new ArgumentException("El código no puede superar los 30 caracteres");
+            }
+
+            // --- Location / Status ---
+            if (string.IsNullOrWhiteSpace(input.Location))
+            {
+                throw new ArgumentException("La ubicación es obligatoria");
+            }
+
+            if (string.IsNullOrWhiteSpace(input.Status))
+            {
+                throw new ArgumentException("El estado es obligatorio");
+            }
         }
 
         // ===== MAPEADORES =====

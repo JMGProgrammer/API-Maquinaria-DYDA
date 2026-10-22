@@ -26,17 +26,6 @@ namespace API_Maquinaria_juan.Repositories
             return await _context.Equipments.FindAsync(id);
         }
 
-        public async Task<bool> ExistsByCodeAsync(string code)
-        {
-            return await _context.Equipments.AnyAsync(e => e.Code == code);
-        }
-
-        public async Task<bool> ExistsByCodeExcludingAsync(string code, string id)
-        {
-            return await _context.Equipments
-                .AnyAsync(e => e.Code == code && e.Id != id);
-        }
-
         public Task<List<string>> GetAllIdsAsync()
         {
             return _context.Equipments
