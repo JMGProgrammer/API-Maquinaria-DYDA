@@ -19,7 +19,7 @@ API REST de maquinaria construida con **ASP.NET Core** y **Entity Framework Core
 API-Maquinaria-juan/
 ├── API-Maquinaria-juan/        # Proyecto principal
 │   ├── Controllers/            # EquipmentController (rutas + try/catch → status codes)
-│   ├── Interfaces/             # Contratos (di) de service y repository
+│   ├── Interfaces/             # Contratos para la inyección de dependencias
 │   ├── Services/               # EquipmentService (Validar, ToEntity, ToReadDto)
 │   ├── Repositories/           # EquipmentRepository (EF Core contra MySQL)
 │   ├── DTOs/                   # EquipmentInputDTO (base), Create/Update/Read
@@ -107,8 +107,8 @@ dotnet ef database update --project API-Maquinaria-juan
 | 400 | Datos inválidos: `Validar()` del service lanza `ArgumentException` y el controller la convierte en `BadRequest(ex.Message)` |
 | 404 | El `id` no existe (service devuelve `null` → controller `NotFound`) |
 
-> Nota: el chequeo de código duplicado existe pero está **retirado** del código
-> (no visto en clase). Está documentado completo en
+> Nota: el chequeo de código duplicado está **retirado** del código (no visto en
+> clase todavía). Está documentado completo en
 > [`Docs/ChequeoCodigoDuplicado.md`](Docs/ChequeoCodigoDuplicado.md), incluido
 > cómo reactivarlo.
 
